@@ -93,64 +93,44 @@ def add_book(
     )
 
 @app.get("/books", response_model=SearchResponse)
-def get_all_books(
+def get_books(
+    query: str | None = Query(None, min_length=3, max_length=100,alias="search(optional)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50)
 ):
     offset = (page - 1) * page_size
-    with con.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM books")
-        total = cur.fetchone()[0]
 
-        cur.execute("""
-            SELECT id, title, author, publisher, cover_image_path
-            FROM books
-            ORDER BY id
-            LIMIT %s OFFSET %s
-        """, (page_size, offset))
-        rows = cur.fetchall()
+    with con.cursor() as cur:
+        if query:
+            query_lower = f"%{query.strip().lower()}%"
+            cur.execute("""
+                SELECT COUNT(*) FROM books
+                WHERE LOWER(title) LIKE %s OR LOWER(author) LIKE %s OR LOWER(publisher) LIKE %s
+            """, (query_lower, query_lower, query_lower))
+            total = cur.fetchone()[0]
+
+            cur.execute("""
+                SELECT id, title, author, publisher, cover_image_path
+                FROM books
+                WHERE LOWER(title) LIKE %s OR LOWER(author) LIKE %s OR LOWER(publisher) LIKE %s
+                ORDER BY id
+                LIMIT %s OFFSET %s
+            """, (query_lower, query_lower, query_lower, page_size, offset))
+            rows = cur.fetchall()
+        else:
+            cur.execute("SELECT COUNT(*) FROM books")
+            total = cur.fetchone()[0]
+
+            cur.execute("""
+                SELECT id, title, author, publisher, cover_image_path
+                FROM books
+                ORDER BY id
+                LIMIT %s OFFSET %s
+            """, (page_size, offset))
+            rows = cur.fetchall()
 
     books = [Book(id=r[0], title=r[1], author=r[2], publisher=r[3], cover_image_path=r[4]) for r in rows]
     total_pages = (total + page_size - 1) // page_size
-
-    return SearchResponse(
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-        results=books
-    )
-
-@app.get("/books/search", response_model=SearchResponse)
-def search_books(
-    query: str = Query(..., min_length=3, max_length=100),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1, le=50)
-):
-    offset = (page - 1) * page_size
-    query_lower = f"%{query.strip().lower()}%"
-
-    with con.cursor() as cur:
-        # total matching books
-        cur.execute("""
-            SELECT COUNT(*) FROM books
-            WHERE LOWER(title) LIKE %s OR LOWER(author) LIKE %s OR LOWER(publisher) LIKE %s
-        """, (query_lower, query_lower, query_lower))
-        total = cur.fetchone()[0]
-
-        # paginated results
-        cur.execute("""
-            SELECT id, title, author, publisher, cover_image_path
-            FROM books
-            WHERE LOWER(title) LIKE %s OR LOWER(author) LIKE %s OR LOWER(publisher) LIKE %s
-            ORDER BY id
-            LIMIT %s OFFSET %s
-        """, (query_lower, query_lower, query_lower, page_size, offset))
-        rows = cur.fetchall()
-
-    books = [Book(id=r[0], title=r[1], author=r[2], publisher=r[3], cover_image_path=r[4]) for r in rows]
-    total_pages = (total + page_size - 1) // page_size
-
     return SearchResponse(
         total=total,
         page=page,
