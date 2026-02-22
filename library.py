@@ -44,10 +44,11 @@ with con.cursor() as cur:
 
 # ------------------ Models ------------------
 class Book(BaseModel):
+    id: int
     title: str = Field(..., min_length=3, max_length=100)
     author: str = Field(..., min_length=3, max_length=100)
-    publisher: str = Field(None, min_length=3, max_length=100)
-    cover_image_path: str | None = None
+    publisher: str | None = Field(None, min_length=3, max_length=100)
+    cover_image_path: str | None
 
 class SearchResponse(BaseModel):
     total: int
@@ -59,27 +60,27 @@ class SearchResponse(BaseModel):
 # ------------------ Routes ------------------
 
 @app.post("/books", response_model=Book, status_code=201)
-async def add_book(
+def add_book(
     title: str = Form(...),
     author: str = Form(...),
-    publisher: str = Form(None),
+    publisher: str | None = Form(None, min_length=3, max_length=100),
     cover_image: UploadFile = File(None)
 ):
     cover_image_path = None
     if cover_image and cover_image.filename:
         file_name = str(uuid.uuid4()) + "_" + cover_image.filename
         file_path = os.path.join(UPLOAD_DIR, file_name)
-        content = await cover_image.read()
+        content = cover_image.file.read()
         with open(file_path, "wb") as f:
             f.write(content)
         cover_image_path = file_path
-# 
+    publisher_value = publisher.strip() if publisher else None
     with con.cursor() as cur:
         cur.execute("""
             INSERT INTO books (title, author, publisher, cover_image_path)
             VALUES (%s, %s, %s, %s)
             RETURNING id
-        """, (title.strip(), author.strip(), publisher.strip(), cover_image_path))
+        """, (title.strip(), author.strip(), publisher_value, cover_image_path))
         book_id = cur.fetchone()[0]
         con.commit()
 
@@ -87,7 +88,7 @@ async def add_book(
         id=book_id,
         title=title.strip(),
         author=author.strip(),
-        publisher=publisher.strip(),
+        publisher=publisher_value,
         cover_image_path=cover_image_path
     )
 
