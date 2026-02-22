@@ -4,7 +4,6 @@ from typing import List
 import os, uuid
 import psycopg
 from dotenv import load_dotenv
-# ------------------ Config ------------------
 app = FastAPI()
 
 load_dotenv()
@@ -12,14 +11,12 @@ load_dotenv()
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# ------------------ Connect to PostgreSQL ------------------
 DB_HOST = os.getenv("DB_HOST")
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_PORT = os.getenv("DB_PORT")
 
-# Create database connection
 con = psycopg.connect(
     host=DB_HOST,
     dbname=DB_NAME,
@@ -28,7 +25,6 @@ con = psycopg.connect(
     port=DB_PORT
 )
 
-# ------------------ Initialize table if not exists ------------------
 with con.cursor() as cur:
     cur.execute("""
         CREATE TABLE IF NOT EXISTS books (
@@ -42,7 +38,6 @@ with con.cursor() as cur:
     """)
     con.commit()
 
-# ------------------ Models ------------------
 class Book(BaseModel):
     id: int
     title: str = Field(..., min_length=3, max_length=100)
@@ -57,7 +52,6 @@ class SearchResponse(BaseModel):
     total_pages: int
     results: List[Book]
 
-# ------------------ Routes ------------------
 
 @app.post("/books", response_model=Book, status_code=201)
 def add_book(
